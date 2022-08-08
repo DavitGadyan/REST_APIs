@@ -1,16 +1,8 @@
-from flask import Flask, request
-from flask_restful import Resource, Api, reqparse
-from flask_jwt import JWT, jwt_required
+import sqlite3
+from flask import request
+from flask_restful import Resource, reqparse
+from flask_jwt import jwt_required
 
-from security import authenticate, identity
-
-app = Flask(__name__)
-app.secret_key = 'dyada'
-api = Api(app)
-
-jwt = JWT(app, authenticate, identity)
-
-items = []
 
 class Item(Resource):
     # to parse and manage inputs in body
@@ -23,8 +15,17 @@ class Item(Resource):
 
     @jwt_required() 
     def get(self, name):
-        item = next(filter(lambda x: x["name"] == name, items), None)
-        return {"item": item}, 200 if item else 404
+        connection = sqlite3.connect("data.db")
+        cursor = connection.cursor()
+
+        query = "SELECT * FROM items WHERE name=?"
+        result = cursor.execute(query, (name,))
+        row = result.fetchone()
+        connection.close()
+
+        if row:
+            return {"item": {"name": row[0], "price": row[1]}}
+        return {"message": "Item not found"}, 404
 
     def post(self, name):
         if next(filter(lambda x: x["name"] == name, items), None):
@@ -56,9 +57,3 @@ class ItemList(Resource):
 
     def get(self):
         return {"items": items}, 200
-
-
-api.add_resource(Item, '/item/<string:name>')
-api.add_resource(ItemList, '/items')
-
-app.run(port=5000, debug=True)
